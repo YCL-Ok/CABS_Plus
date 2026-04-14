@@ -22,7 +22,7 @@ To set up the environment, use the provided `requirements.txt` file:
 ```bash
 # Create the environment
 pip install -r requirements.txt
-
+```
 ### Experiments
 
 The repository contains two types of experiments:
