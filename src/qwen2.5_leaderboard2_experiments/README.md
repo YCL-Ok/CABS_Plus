@@ -74,20 +74,23 @@ python prune_task_vector_7b.py \
 
 ### 3. Model Merging and Evaluation
 
-Finally, merge the pruned task vectors with the base model and evaluate them using the provided recipes for MergeKit and then evaluate the merged model using lm-evaluation-harness.
+Finally, merge the pruned task vectors into the base model using the AWA strategy, and evaluate the resulting model using lm-evaluation-harness.
 
-- **MergeKit Recipe**: Use MergeKit to merge the pruned vectors.
-
-Run MergeKit with the following command:
 ```
-mergekit-yaml /src/mistrial_leaderboard_experiments/recipes/recipe.yml /path/to/save/models/model_name/
+python main.py \
+  --base_model path/to/qwen-2.5-7b-instruct \
+  --pruned_vectors /path/to/save/pruned_vector_fq2.5-7b-it /path/to/save/pruned_vector_Tsunami-0.5-7B-Instruct \
+  --output_path bigModels_merged/fqFirst \
 ```
 
 - **LM-Evaluation-Harness**: Use LM-Evaluation-Harness to evaluate the merged model on the specified tasks.
 
-Example command:
 ```
-lm-evaluation-harness --model hf --model_args pretrained=/path/to/models/model_name --tasks arc_challenge,hellaswag,truthfulqa_mc2,winogrande,gsm8k,mmlu --device cuda:0 --batch_size 8 --output_path results.json
+lm_eval --model hf \
+    --model_args pretrained=bigModels_merged/fqFirst,dtype=bfloat16,trust_remote_code=True \
+    --tasks leaderboard \
+    --batch_size auto \
+    --output_path results.json
 ```
 
 ## Hyperparameters
@@ -98,6 +101,11 @@ The hyperparameters for the 7B model experiments are controlled by the following
 - **m**: Total number of elements in each group for pruning (required for `nm` pruning).
 - **sparsity_level**: Defines the target sparsity level for pruning (required for `random` and `magnitude` pruning).
 - **pruning_method**: Specifies the pruning method (`nm`, `random`, `magnitude`).
+- **max_steps**: The maximum number of iterations for the AWA algorithm to run.
+- **x0:** The initial starting point (center) for the coefficient search space. A value of 1.0 represents standard task vector addition.
+- **bounds:** Defines the lower and upper limits for the coefficient search space to prevent extreme scaling.
+- **sigma0:** The initial step size for the AWA search distribution.
+- **popsize:** The number of candidate solutions generated and evaluated in each evolutionary generation.
 
 ## Results
 
