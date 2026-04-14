@@ -12,7 +12,6 @@ import cma
 import numpy as np
 import pandas as pd
 import logging
-import random
 
 from transformers import (
     RobertaTokenizerFast,
@@ -26,6 +25,7 @@ device = torch.device("cuda" if torch.cuda.is_available() else "cpu")
 logging.basicConfig(level=logging.INFO)
 logger = logging.getLogger(__name__)
 
+
 class FastGPUTaskVectorPool:
     def __init__(self, base_model_path, task_names, task_model_paths, device="cuda"):
         self.device = device
@@ -37,7 +37,6 @@ class FastGPUTaskVectorPool:
         self.base_model.requires_grad_(False)
         self.base_state_dict = self.base_model.state_dict()
 
-        # Detect number of encoder layers
         self.num_layers = 0
         for key in self.base_state_dict.keys():
             match = re.search(r'encoder\.layer\.(\d+)\.', key)
@@ -48,7 +47,6 @@ class FastGPUTaskVectorPool:
         self.num_layers += 1
         print(f"Detected {self.num_layers} layers.")
 
-        # Compute deltas and keep on GPU
         self.task_deltas = []
         print("Computing Deltas and keeping them on GPU...")
 
@@ -131,6 +129,7 @@ class FastGPUTaskVectorPool:
                         total_delta.add_(self.task_deltas[t_idx][k], alpha=c)
 
                 base_param.sub_(total_delta)
+
 
 class CalibrationDataManager:
     def __init__(self, tokenizer, task_names, batch_size=8, max_length=128):
@@ -225,7 +224,6 @@ class CalibrationDataManager:
                 flat_first = sum(first, [])
                 flat_second = sum(second, [])
                 tokenized = self.tokenizer(flat_first, flat_second, truncation=True, max_length=self.max_length, padding="max_length")
-
                 data = {k: [v[i:i+4] for i in range(0, len(v), 4)] for k, v in tokenized.items()}
                 label_map = {"A": 0, "B": 1, "C": 2, "D": 3}
                 data["label"] = [label_map[a] for a in examples["answer"]]
@@ -299,9 +297,7 @@ class CalibrationDataManager:
         print(f"Task {task_name}: Accumulated {len(batches)} batches. Total Size: {accumulated['input_ids'].size(0)}")
         return accumulated
 
-# =========================================================
-#  AWA optimization engine
-# =========================================================
+
 class AWA_Engine:
     def __init__(self, pool, tokenizer, task_names, heads_cache, batch_size):
         self.pool = pool
@@ -338,9 +334,18 @@ class AWA_Engine:
             return (start_loss + end_loss) / 2.0
 
         elif task_lower == "race":
-            x = F.linear(cls_output, head['classifier.dense.weight'], head['classifier.dense.bias'])
-            x = torch.tanh(x)
-            logits = F.linear(x, head['classifier.weight'], head['classifier.bias'])
+            x = cls_output
+            if 'classifier.dense.weight' in head:
+                x = F.linear(x, head['classifier.dense.weight'], head['classifier.dense.bias'])
+                x = torch.tanh(x)
+
+            if 'classifier.out_proj.weight' in head:
+                logits = F.linear(x, head['classifier.out_proj.weight'], head['classifier.out_proj.bias'])
+            elif 'classifier.weight' in head:
+                logits = F.linear(x, head['classifier.weight'], head['classifier.bias'])
+            else:
+                raise KeyError(f"Task {task_name}: Head weights not found. Available keys: {list(head.keys())}")
+
             return nn.CrossEntropyLoss()(logits.view(-1, 4), batch['labels'].to(self.pool.device))
 
         elif task_lower == "stsb":
@@ -362,7 +367,7 @@ class AWA_Engine:
         else:
             num_params = num_tasks * (self.pool.num_layers + 1)
 
-        print(f"Optimizing {num_params} params. Mode: {mode} (Strategy: Regularized Anchor)")
+        print(f"Optimizing {num_params} params. Mode: {mode}")
 
         initial_val = 1.00
         x0 = [initial_val] * num_params
@@ -377,7 +382,7 @@ class AWA_Engine:
         es = cma.CMAEvolutionStrategy(x0, sigma0, opts)
 
         batches = {}
-        print("Accumulating Batches for Stable Calibration...")
+
         for t in self.task_names:
             if t.lower() in ['cola', 'mrpc', 'rte']:
                 b = self.data_manager.get_accumulated_batch(t, num_batches=8)
@@ -386,19 +391,18 @@ class AWA_Engine:
             if b:
                 batches[t] = b
 
-        print("Calculating Anchor Baseline...")
+        print("Calculating Initial Baseline Loss for Normalization...")
         self.pool.apply_coeffs(x0, mode=mode)
         baseline_losses = {}
         for t, batch in batches.items():
             l = self.forward_loss(t, batch)
             val = l.item() if isinstance(l, torch.Tensor) else l
-            baseline_losses[t] = val
-            print(f"  Task {t}: Anchor Loss = {val:.4f}")
+            baseline_losses[t] = val + 1e-8
+            print(f"  Task {t}: Baseline Loss = {val:.4f}")
         self.pool.restore_base(x0, mode=mode)
 
         best_fitness = 999.0
         best_coeffs = x0
-        x0_np = np.array(x0)
 
         patience = 6
         trigger_times = 0
@@ -422,18 +426,13 @@ class AWA_Engine:
                     l = self.forward_loss(t, batch)
                     curr_loss = l.item() if isinstance(l, torch.Tensor) else l
                     base_loss = baseline_losses[t]
-                    diff = curr_loss - base_loss
-                    # Asymmetric penalty: large penalty for loss increase
-                    if diff > 0:
-                        loss_score += diff * 100.0
+                    relative_diff = (curr_loss - base_loss) / base_loss
+                    if relative_diff > 0:
+                        loss_score += relative_diff * 100.0
                     else:
-                        loss_score += diff * 1.0
+                        loss_score += relative_diff * 1.0
 
-                dist = np.sum((sol - x0_np) ** 2)
-                reg_term = 0.5 * dist
-                current_fitness = loss_score + reg_term
-
-                fitness_list.append(current_fitness)
+                fitness_list.append(loss_score)
                 self.pool.restore_base(sol, mode=mode)
 
             es.tell(solutions, fitness_list)
@@ -469,6 +468,7 @@ def load_checkpoint_state_dict(path_str):
                 return torch.load(p, map_location='cpu')
     return torch.load(path_str, map_location='cpu')
 
+
 if __name__ == "__main__":
     parser = argparse.ArgumentParser()
     parser.add_argument("--base_model_path", type=str, required=True)
@@ -481,7 +481,6 @@ if __name__ == "__main__":
 
     args = parser.parse_args()
 
-    # Preload task-specific heads for loss computation during search
     task_specific_paths = {
         "cola": "CABS_Ex/models/textattack_roberta-base-CoLA",
         "sst2": "CABS_Ex/models/textattack_roberta-base-SST-2",
@@ -498,10 +497,15 @@ if __name__ == "__main__":
         path = task_specific_paths.get(task.lower())
         if path:
             state = load_checkpoint_state_dict(path)
+
             if task.lower() == "squad":
                 target = ["qa_outputs.weight", "qa_outputs.bias"]
             elif task.lower() == "race":
-                target = ["classifier.weight", "classifier.bias", "classifier.dense.weight", "classifier.dense.bias"]
+                target = [
+                    "classifier.weight", "classifier.bias",
+                    "classifier.dense.weight", "classifier.dense.bias",
+                    "classifier.out_proj.weight", "classifier.out_proj.bias"
+                ]
             else:
                 target = ["classifier.dense.weight", "classifier.dense.bias", "classifier.out_proj.weight", "classifier.out_proj.bias"]
 
@@ -510,6 +514,10 @@ if __name__ == "__main__":
                 clean_k = k.replace("roberta.", "").replace("model.", "")
                 if clean_k in target:
                     head_sd[clean_k] = state[k].to(device)
+
+            if not head_sd:
+                print(f"[Warning] No head weights loaded for {task}! Keys in checkpoint: {list(state.keys())[:5]}...")
+
             if head_sd:
                 heads_cache[task.lower()] = head_sd
 
@@ -547,7 +555,6 @@ if __name__ == "__main__":
         task_performance[task] = score
         print(f"  -> Score: {score}")
 
-    # Save results
     data = []
     header = ['algorithm', 'learned_weights']
     row = ["CABS+", json.dumps(best_coeffs.tolist() if isinstance(best_coeffs, np.ndarray) else best_coeffs)]
