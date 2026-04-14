@@ -195,7 +195,7 @@ class CMAES_Engine:
             
         print(f"Optimizing {num_params} params. Mode: {mode}")
 
-        x0 = [1.2] * num_params
+        x0 = [1.0] * num_params
         sigma0 = 0.05
         bounds = [0.10, 2.00]
         
