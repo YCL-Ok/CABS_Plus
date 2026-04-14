@@ -111,6 +111,7 @@ The hyperparameters for the 7B model experiments are controlled by the following
 
 The results of the merging and evaluation step will be saved in **results.json**, containing metrics such as accuracy and task-specific performance. 
 Uploading this json file to **read_jsonResults.py** will reproduce the results reported in the paper.
+Our merged checkpoints can be obtained from xxxx.com and xxxx.com.
 
 ## Notes
 
