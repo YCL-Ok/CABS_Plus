@@ -179,9 +179,9 @@ class CalibrationManager:
         return itertools.cycle(loader)
 
 # =========================================================
-# CMA-ES Optimization Engine
+# AWA Optimization Engine
 # =========================================================
-class CMAES_Engine:
+class AWA_Engine:
     def __init__(self, pool, tokenizer, batch_size):
         self.pool = pool
         self.data_manager = CalibrationManager(tokenizer, batch_size=batch_size)
@@ -272,7 +272,7 @@ if __name__ == "__main__":
     tokenizer = AutoTokenizer.from_pretrained(args.base_model, trust_remote_code=True)
     
     pool = HybridTaskVectorPool(args.base_model, args.pruned_vectors)
-    engine = CMAES_Engine(pool, tokenizer, batch_size=args.batch_size)
+    engine = AWA_Engine(pool, tokenizer, batch_size=args.batch_size)
     
     best_coeffs = engine.run(mode=args.level, max_steps=50)
     
