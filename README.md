@@ -17,22 +17,18 @@ Illustration of the overall framework of CABS+. (a) Conflict-Aware and Balanced 
 
 ### Install Dependencies
 
-To set up the environment, use the provided `environment.yml` file:
+To set up the environment, use the provided `requirements.txt` file:
 
 ```bash
 # Create the environment
-conda env create -f environment.yml
-
-# Activate the environment
-conda activate CABS
-```
+pip install -r requirements.txt
 
 ### Experiments
 
 The repository contains two types of experiments:
 
-1. **RoBERTa GLUE Experiments**: The experiments on RoBERTa are organized under the `src/roberta_glue_experiments` directory. These experiments include extracting task vectors, sparsifying them, merging, and evaluating the merged models on GLUE tasks.
+1. **RoBERTa GLUE Experiments**: The experiments on RoBERTa are organized under the `src/roberta_glue_experiments` directory. These experiments include extracting task vectors, sparsifying them, merge coefficient search, merging, and evaluating the merged models on GLUE tasks.
 
-2. **MIstral llm_leaderboard Experiments**: The experiments on the 7B parameter model are organized under the `src/mistral_leaderboard_experiments` directory. These experiments include using task vectors to perform model merging with MergeKit and evaluating with lm-evaluation-harness.
+2. **Qwen2.5 llm_leaderboard 2 Experiments**: The experiments on the 7B parameter model are organized under the `src/qwen2.5_leaderboard2_experiments` directory. These experiments include using task vectors to perform model merging and evaluating with lm-evaluation-harness.
 
 Detailed instructions for running the experiments are provided in each respective directory.
