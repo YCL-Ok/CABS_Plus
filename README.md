@@ -9,7 +9,7 @@ To address these challenges, prior work introduced the **Conflict-Aware and Bala
 
 ## Summary figure
 
-![image](https://github.com/user-attachments/assets/9ef9e2bf-d8b3-4a53-bbfc-6fb00f40dcf8)
+![image](https://github.com/YCL-Ok/CABS_Plus/blob/main/images/Framework.jpg)
 
 Illustration of the overall framework of CABS+. (a) Conflict-Aware and Balanced Sparsification; (b) Adaptive Weight Allocation strategy; (c) Overall pipeline of CABS+.
 
