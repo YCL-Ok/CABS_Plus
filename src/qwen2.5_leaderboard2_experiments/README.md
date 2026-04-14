@@ -83,7 +83,7 @@ python main.py \
   --output_path bigModels_merged/fqFirst \
 ```
 
-- **LM-Evaluation-Harness**: Use LM-Evaluation-Harness to evaluate the merged model on the specified tasks.
+**LM-Evaluation-Harness**: Use LM-Evaluation-Harness to evaluate the merged model on the specified tasks.
 
 ```
 lm_eval --model hf \
