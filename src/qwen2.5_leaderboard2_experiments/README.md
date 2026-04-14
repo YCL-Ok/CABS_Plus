@@ -1,6 +1,6 @@
 # 7B Model Experiments Framework
 
-This document describes the framework for conducting experiments on the 7B model using model pruning, merging, and evaluation methodologies. This framework extends similar approaches from the RoBERTa experiments to a larger-scale model
+This document describes the framework for conducting experiments on the 7B model using model pruning, merging, and evaluation methodologies. This framework extends similar approaches from the RoBERTa experiments to a larger-scale model.
 
 ## Overview
 
@@ -13,17 +13,17 @@ The 7B model experiments are divided into three main steps:
 
 ## Models
 
-we utilized pre-trained and fine-tuned versions of the Mistral model, obtained from Hugging Face. Specifically, the models used in our experiments were built upon the [Mistral-7b-v0.1](https://huggingface.co/mistral-7b-v0.1) backbone. Fine-tuned variants used include:
+we utilized pre-trained and fine-tuned versions of the Qwen2.5 model, obtained from Hugging Face. Specifically, the models used in our experiments were built upon the [qwen-2.5-7b-instruct](https://huggingface.co/Qwen/Qwen2.5-7B-Instruct) backbone. Fine-tuned variants used include:
 
-- [WildMarcoroni-Variant1-7B](https://huggingface.co/WildMarcoroni-Variant1-7B)
-- [WestSeverus-7B-DPO-v2](https://huggingface.co/WestSeverus-7B-DPO-v2)
+- [fq2.5-7b-it](https://huggingface.co/ehristoforu/fq2.5-7b-it-normalize_false)
+- [Tsunami-0.5-7B-Instruct](https://huggingface.co/Tsunami-th/Tsunami-0.5-7B-Instruct)
 
 ## Files and Scripts
 
 - **convert_dtype.py**: Code for convert model dtype
 - **extract_task_vector_7b.py**: Code for extracting task vectors from the fine-tuned models by subtracting base model parameters.
 - **prune_task_vector_7b.py**: Code for applying different sparsification methods to the task vectors.
-- **/recipes**：recipes for merging models using Mergekit.
+- **main.py**：merging models using AWA strategy.
 
 ## Running Experiments
 
@@ -43,18 +43,18 @@ To extract task vectors, you will need to run the `extract_task_vector_7b.py` sc
 
 ```bash
 python extract_task_vector_7b.py \
-    --finetuned_model_path path/to/BarryFutureman/WildMarcoroni-Variant1-7B \
-    --base_model_path path/to/Mistral-7b-v0.1-float16 \
-    --save_path /path/to/save/task_vector_wildmarcoroni
+    --finetuned_model_path path/to/fq2.5-7b-it \
+    --base_model_path path/to/qwen-2.5-7b-instruct \
+    --save_path /path/to/save/task_vector_fq2.5-7b-it
 ```
 
 #### Second Run:
 
 ```bash
 python extract_task_vector_7b.py \
-    --finetuned_model_path path/to/PetroGPT/WestSeverus-7B-DPO-v2 \
-    --base_model_path path/to/Mistral-7b-v0.1-float16 \
-    --save_path /path/to/save/task_vector_westseverus
+    --finetuned_model_path path/to/Tsunami-0.5-7B-Instruct \
+    --base_model_path path/to/qwen-2.5-7b-instruct \
+    --save_path /path/to/save/task_vector_Tsunami-0.5-7B-Instruct
 ```
 
 ### 2. Sparsification of Task Vectors
@@ -63,13 +63,13 @@ Once the task vectors are extracted, apply sparsification to both vectors simult
 
 ```bash
 python prune_task_vector_7b.py \
-    --task_vector_path1 /path/to/task_vector_wildmarcoroni \
-    --task_vector_path2 /path/to/task_vector_westseverus \
+    --task_vector_path1 /path/to/task_vector_fq2.5-7b-it \
+    --task_vector_path2 /path/to/task_vector_Tsunami-0.5-7B-Instruct \
     --n 64 \
     --m 256 \
     --pruning_method "nm" \
-    --save_directory1 /path/to/save/pruned_vector_wildmarcoroni \
-    --save_directory2 /path/to/save/pruned_vector_westseverus
+    --save_directory1 /path/to/save/pruned_vector_fq2.5-7b-it \
+    --save_directory2 /path/to/save/pruned_vector_Tsunami-0.5-7B-Instruct
 ```
 
 ### 3. Model Merging and Evaluation
